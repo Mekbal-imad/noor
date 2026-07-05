@@ -40,5 +40,6 @@ RUN echo '<VirtualHost *:80>\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
 EXPOSE 80
+RUN echo "MYSQL_ATTR_SSL_VERIFY_SERVER_CERT=false" >> /var/www/html/.env
 
 CMD ["apache2-foreground"]
