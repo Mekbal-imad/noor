@@ -75,6 +75,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('teacher-attendance', [AttendanceController::class, 'markTeacherAttendance']);
         Route::get('teacher-attendance',  [AttendanceController::class, 'getTeacherAttendance']);
         Route::put('profile/password', [AuthController::class, 'changePassword']);
+        Route::get('stats/grade',           [AttendanceController::class, 'gradeStats']);
+        Route::get('stats/student/{id}',    [AttendanceController::class, 'studentStats']);
 
         // Attendance
         Route::get('attendance',  [AttendanceController::class, 'index']);
