@@ -154,21 +154,7 @@ class StatsController extends Controller
     ->orderBy('date', 'desc')
     ->first();
 
-$studentStats[] = [
-    'id'               => $student->id,
-    'name'             => $student->name,
-    'attendance_rate'  => $rate,
-    'avg_grade'        => round($avgMem, 1),
-    'total_sessions'   => $total,
-    'last_memorization' => $lastMemorization ? [
-        'from_surah' => $lastMemorization->from_surah,
-        'from_ayah'  => $lastMemorization->from_ayah,
-        'to_surah'   => $lastMemorization->to_surah,
-        'to_ayah'    => $lastMemorization->to_ayah,
-        'grade'      => $lastMemorization->grade,
-        'date'       => $lastMemorization->date,
-    ] : null,
-];
+
 $memorizationCount = MemorizationRecord::where('student_id', $student->id)
     ->where('type', 'memorization')
     ->where('date', '>=', $startDate)
