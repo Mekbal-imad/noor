@@ -9,10 +9,18 @@ RUN apt-get update && apt-get install -y \
     unzip \
     git \
     curl \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd opcache
 
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
+
+# OPcache (NEW)
+RUN { \
+    echo 'opcache.enable=1'; \
+    echo 'opcache.memory_consumption=128'; \
+    echo 'opcache.max_accelerated_files=10000'; \
+    echo 'opcache.validate_timestamps=0'; \
+    } > /usr/local/etc/php/conf.d/opcache.ini
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -42,4 +50,8 @@ RUN echo '<VirtualHost *:80>\n\
 EXPOSE 80
 RUN echo "MYSQL_ATTR_SSL_VERIFY_SERVER_CERT=false" >> /var/www/html/.env
 
-CMD ["apache2-foreground"]
+# Startup script (NEW)
+COPY start.sh /usr/local/bin/start.sh
+RUN sed -i 's/\r$//' /usr/local/bin/start.sh && chmod +x /usr/local/bin/start.sh
+
+CMD ["start.sh"]
