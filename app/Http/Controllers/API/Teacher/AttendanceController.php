@@ -302,5 +302,17 @@ public function studentStats(Request $request, $studentId)
         ],
     ]);
 }
+public function teacherAttendanceRange(Request $request)
+{
+    $request->validate([
+        'from' => 'required|date',
+        'to'   => 'required|date',
+    ]);
 
+    $records = \App\Models\TeacherAttendance::where('teacher_id', $request->user()->id)
+        ->whereBetween('date', [$request->from, $request->to])
+        ->get(['class_id', 'date', 'status']);
+
+    return response()->json($records);
+}
 }
