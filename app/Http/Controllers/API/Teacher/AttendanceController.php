@@ -170,6 +170,19 @@ public function gradeStats(Request $request)
             ? round(($presentCount / $totalRecords) * 100, 1)
             : 0;
 
+        // Average students present per session (e.g. 12 out of 14)
+        $totalStudents = $grade->students->count();
+        $sessionCount = \App\Models\Attendance::whereIn('student_id', $studentIds)
+            ->whereIn('class_id', $classIds)
+            ->where('date', '>=', $startDate)
+            ->select('date', 'class_id')
+            ->distinct()
+            ->get()
+            ->count();
+        $avgPresent = $sessionCount > 0
+            ? round(($presentCount + $lateCount) / $sessionCount, 1)
+            : 0;
+
         $avgMemGrade = \App\Models\MemorizationRecord::whereIn('student_id', $studentIds)
             ->where('teacher_id', $teacher->id)
             ->where('date', '>=', $startDate)
@@ -187,13 +200,15 @@ public function gradeStats(Request $request)
 
         $result[] = [
             'grade'          => ['id' => $grade->id, 'name' => $grade->name],
-            'total_students' => $grade->students->count(),
+            'total_students' => $totalStudents,
             'attendance'     => [
-                'rate'    => $attendanceRate,
-                'present' => $presentCount,
-                'absent'  => $absentCount,
-                'late'    => $lateCount,
-                'total'   => $totalRecords,
+                'rate'         => $attendanceRate,
+                'present'      => $presentCount,
+                'absent'       => $absentCount,
+                'late'         => $lateCount,
+                'total'        => $totalRecords,
+                'avg_present'  => $avgPresent,
+                'sessions'     => $sessionCount,
             ],
             'memorization'   => [
                 'avg_grade' => round($avgMemGrade, 1),

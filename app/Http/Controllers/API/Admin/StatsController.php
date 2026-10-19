@@ -87,6 +87,19 @@ class StatsController extends Controller
             ? round(($presentCount / $totalAttendanceRecords) * 100, 1)
             : 0;
 
+        // Average students present per session (e.g. 12 out of 14)
+        $totalStudents = $grade->students->count();
+        $sessionCount = Attendance::whereIn('student_id', $studentIds)
+            ->whereIn('class_id', $classIds)
+            ->where('date', '>=', $startDate)
+            ->select('date', 'class_id')
+            ->distinct()
+            ->get()
+            ->count();
+        $avgPresent = $sessionCount > 0
+            ? round(($presentCount + $lateCount) / $sessionCount, 1)
+            : 0;
+
         // ── Daily Attendance (last 7 days) ──
         $dailyAttendance = [];
         for ($i = 6; $i >= 0; $i--) {
@@ -184,12 +197,15 @@ $studentStats[] = [
             'grade'            => $grade,
             'period'           => $period,
             'attendance' => [
-                'rate'    => $attendanceRate,
-                'present' => $presentCount,
-                'absent'  => $absentCount,
-                'late'    => $lateCount,
-                'total'   => $totalAttendanceRecords,
-                'daily'   => $dailyAttendance,
+                'rate'         => $attendanceRate,
+                'present'      => $presentCount,
+                'absent'       => $absentCount,
+                'late'         => $lateCount,
+                'total'        => $totalAttendanceRecords,
+                'avg_present'  => $avgPresent,
+                'total_students' => $totalStudents,
+                'sessions'     => $sessionCount,
+                'daily'        => $dailyAttendance,
             ],
             'classes' => [
                 'held'   => $classesHeld,

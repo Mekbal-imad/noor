@@ -142,6 +142,25 @@ class ReportController extends Controller
         });
 
         $all = $records->flatten(1);
+        $presentCount = $all->where('status', 'present')->count();
+        $absentCount  = $all->where('status', 'absent')->count();
+        $lateCount    = $all->where('status', 'late')->count();
+        $totalCount   = $all->count();
+        $totalStudents = $students->count();
+        $sessionCount = $all->pluck('date')->unique()->count();
+        $avgPresent = $sessionCount > 0
+            ? round(($presentCount + $lateCount) / $sessionCount, 1)
+            : 0;
+
+        $classesHeld = TeacherAttendance::where('class_id', $class->id)
+            ->whereBetween('date', [$request->from, $request->to])
+            ->where('class_held', true)
+            ->count();
+
+        $classesMissed = TeacherAttendance::where('class_id', $class->id)
+            ->whereBetween('date', [$request->from, $request->to])
+            ->where('class_held', false)
+            ->count();
 
         return response()->json([
             'class' => [
@@ -152,13 +171,18 @@ class ReportController extends Controller
             'from' => $request->from,
             'to'   => $request->to,
             'summary' => [
-                'present' => $all->where('status', 'present')->count(),
-                'absent'  => $all->where('status', 'absent')->count(),
-                'late'    => $all->where('status', 'late')->count(),
-                'total'   => $all->count(),
-                'rate'    => $all->count() > 0
-                    ? round(($all->where('status', 'present')->count() / $all->count()) * 100, 1)
+                'present'        => $presentCount,
+                'absent'         => $absentCount,
+                'late'           => $lateCount,
+                'total'          => $totalCount,
+                'rate'           => $totalCount > 0
+                    ? round(($presentCount / $totalCount) * 100, 1)
                     : 0,
+                'avg_present'    => $avgPresent,
+                'total_students' => $totalStudents,
+                'sessions'       => $sessionCount,
+                'classes_held'   => $classesHeld,
+                'classes_missed' => $classesMissed,
             ],
             'rows' => $rows,
         ]);
