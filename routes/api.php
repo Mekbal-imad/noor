@@ -9,6 +9,7 @@ use App\Http\Controllers\API\Admin\ClassController;
 use App\Http\Controllers\API\Admin\ExamController;
 use App\Http\Controllers\API\Teacher\AttendanceController;
 use App\Http\Controllers\API\Teacher\MemorizationController;
+use App\Http\Controllers\API\Teacher\ReportController;
 use App\Http\Controllers\API\Teacher\StudyPlanController;
 use App\Http\Controllers\API\Parent\ChildController;
 use App\Http\Controllers\API\Parent\NotificationController;
@@ -93,6 +94,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('study-plans',      [StudyPlanController::class, 'store']);
         Route::put('study-plans/{id}',  [StudyPlanController::class, 'update']);
         Route::delete('study-plans/{id}', [StudyPlanController::class, 'destroy']);
+
+        // Reports
+        Route::get('reports/daily',          [ReportController::class, 'daily']);
+        Route::get('reports/attendance',     [ReportController::class, 'attendance']);
+        Route::get('reports/student/{id}',   [ReportController::class, 'student']);
+        Route::get('reports/session',        [ReportController::class, 'session']);
     });
 
     // ── Parent Routes ─────────────────────────────────────
