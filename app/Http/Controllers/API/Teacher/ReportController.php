@@ -8,6 +8,7 @@ use App\Models\ClassRoom;
 use App\Models\MemorizationRecord;
 use App\Models\Student;
 use App\Models\StudyPlan;
+use App\Models\TeacherAttendance;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
