@@ -8,7 +8,6 @@ use App\Models\ClassRoom;
 use App\Models\MemorizationRecord;
 use App\Models\Student;
 use App\Models\StudyPlan;
-use App\Models\TeacherAttendance;
 use Illuminate\Http\Request;
 
 class ReportController extends Controller
@@ -300,104 +299,6 @@ class ReportController extends Controller
                 'target_date' => $p->target_date,
                 'status'      => $p->status,
             ]),
-        ]);
-    }
-
-    public function session(Request $request)
-    {
-        $request->validate([
-            'class_id' => 'required|exists:classes,id',
-            'from'     => 'required|date',
-            'to'       => 'required|date|after_or_equal:from',
-        ]);
-
-        $teacher = $request->user();
-        $class = $this->assertTeacherOwnsClass($request, (int) $request->class_id);
-        $students = $class->students()->orderBy('name')->get();
-        $studentIds = $students->pluck('id');
-
-        $attendance = Attendance::where('class_id', $class->id)
-            ->whereIn('student_id', $studentIds)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->get();
-
-        $memRecords = MemorizationRecord::where('teacher_id', $teacher->id)
-            ->whereIn('student_id', $studentIds)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->get();
-
-        $teacherAtt = TeacherAttendance::where('teacher_id', $teacher->id)
-            ->where('class_id', $class->id)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->get();
-
-        $heldDays = $teacherAtt->where('class_held', true)->count();
-        $missedDays = $teacherAtt->where('class_held', false)->count();
-        $attendanceDays = $attendance->pluck('date')->unique()->count();
-
-        $present = $attendance->where('status', 'present')->count();
-        $absent  = $attendance->where('status', 'absent')->count();
-        $late    = $attendance->where('status', 'late')->count();
-        $attTotal = $attendance->count();
-
-        $byStudent = $students->map(function ($student) use ($attendance, $memRecords) {
-            $att = $attendance->where('student_id', $student->id);
-            $mem = $memRecords->where('student_id', $student->id);
-            $total = $att->count();
-            $presentCount = $att->where('status', 'present')->count();
-
-            return [
-                'student' => [
-                    'id'   => $student->id,
-                    'name' => $student->name,
-                ],
-                'attendance' => [
-                    'present' => $presentCount,
-                    'absent'  => $att->where('status', 'absent')->count(),
-                    'late'    => $att->where('status', 'late')->count(),
-                    'total'   => $total,
-                    'rate'    => $total > 0 ? round(($presentCount / $total) * 100, 1) : 0,
-                ],
-                'lessons' => [
-                    'total'        => $mem->count(),
-                    'memorization' => $mem->where('type', 'memorization')->count(),
-                    'revision'     => $mem->where('type', 'revision')->count(),
-                    'confirmation' => $mem->where('type', 'confirmation')->count(),
-                    'avg_grade'    => round($mem->avg('grade') ?? 0, 1),
-                ],
-            ];
-        });
-
-        return response()->json([
-            'class' => [
-                'id'         => $class->id,
-                'name'       => $class->name,
-                'grade_name' => $class->grade?->name,
-                'type'       => $class->type,
-            ],
-            'from' => $request->from,
-            'to'   => $request->to,
-            'summary' => [
-                'students'        => $students->count(),
-                'attendance_days' => $attendanceDays,
-                'classes_held'    => $heldDays,
-                'classes_missed'  => $missedDays,
-                'attendance' => [
-                    'present' => $present,
-                    'absent'  => $absent,
-                    'late'    => $late,
-                    'total'   => $attTotal,
-                    'rate'    => $attTotal > 0 ? round(($present / $attTotal) * 100, 1) : 0,
-                ],
-                'lessons' => [
-                    'total'        => $memRecords->count(),
-                    'memorization' => $memRecords->where('type', 'memorization')->count(),
-                    'revision'     => $memRecords->where('type', 'revision')->count(),
-                    'confirmation' => $memRecords->where('type', 'confirmation')->count(),
-                    'avg_grade'    => round($memRecords->avg('grade') ?? 0, 1),
-                ],
-            ],
-            'students' => $byStudent,
         ]);
     }
 }

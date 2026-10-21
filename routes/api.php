@@ -99,7 +99,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('reports/daily',          [ReportController::class, 'daily']);
         Route::get('reports/attendance',     [ReportController::class, 'attendance']);
         Route::get('reports/student/{id}',   [ReportController::class, 'student']);
-        Route::get('reports/session',        [ReportController::class, 'session']);
     });
 
     // ── Parent Routes ─────────────────────────────────────
