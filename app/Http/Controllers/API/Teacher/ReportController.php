@@ -105,20 +105,56 @@ class ReportController extends Controller
     public function attendance(Request $request)
     {
         $request->validate([
-            'class_id' => 'required|exists:classes,id',
+            'class_id' => 'nullable',
             'from'     => 'required|date',
             'to'       => 'required|date|after_or_equal:from',
         ]);
 
-        $class = $this->assertTeacherOwnsClass($request, (int) $request->class_id);
-        $students = $class->students()->orderBy('name')->get();
+        $teacher = $request->user();
+        $allClasses = !$request->filled('class_id') || $request->class_id === 'all';
+
+        if ($allClasses) {
+            $classes = $teacher->classes()->with('grade')->get();
+            $classIds = $classes->pluck('id');
+
+            $students = $classIds->isEmpty()
+                ? collect()
+                : Student::whereHas('classes', fn ($q) => $q->whereIn('classes.id', $classIds))
+                    ->orderBy('name')
+                    ->get();
+
+            $classMeta = [
+                'id'         => null,
+                'name'       => 'جميع الحلقات',
+                'grade_name' => $classes->count() > 0
+                    ? $classes->count() . ' حلقة'
+                    : null,
+            ];
+        } else {
+            $request->validate([
+                'class_id' => 'exists:classes,id',
+            ]);
+
+            $class = $this->assertTeacherOwnsClass($request, (int) $request->class_id);
+            $classIds = collect([$class->id]);
+            $students = $class->students()->orderBy('name')->get();
+
+            $classMeta = [
+                'id'         => $class->id,
+                'name'       => $class->name,
+                'grade_name' => $class->grade?->name,
+            ];
+        }
+
         $studentIds = $students->pluck('id');
 
-        $records = Attendance::where('class_id', $class->id)
-            ->whereIn('student_id', $studentIds)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->get()
-            ->groupBy('student_id');
+        $records = $classIds->isEmpty() || $studentIds->isEmpty()
+            ? collect()
+            : Attendance::whereIn('class_id', $classIds)
+                ->whereIn('student_id', $studentIds)
+                ->whereBetween('date', [$request->from, $request->to])
+                ->get()
+                ->groupBy('student_id');
 
         $rows = $students->map(function ($student) use ($records) {
             $list = $records->get($student->id) ?? collect();
@@ -147,29 +183,32 @@ class ReportController extends Controller
         $lateCount    = $all->where('status', 'late')->count();
         $totalCount   = $all->count();
         $totalStudents = $students->count();
-        $sessionCount = $all->pluck('date')->unique()->count();
+        $sessionCount = $allClasses
+            ? $all->unique(fn ($r) => $r->class_id . '|' . $r->date)->count()
+            : $all->pluck('date')->unique()->count();
         $avgPresent = $sessionCount > 0
             ? round(($presentCount + $lateCount) / $sessionCount, 1)
             : 0;
 
-        $classesHeld = TeacherAttendance::where('class_id', $class->id)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->where('class_held', true)
-            ->count();
+        $classesHeld = $classIds->isEmpty()
+            ? 0
+            : TeacherAttendance::whereIn('class_id', $classIds)
+                ->whereBetween('date', [$request->from, $request->to])
+                ->where('class_held', true)
+                ->count();
 
-        $classesMissed = TeacherAttendance::where('class_id', $class->id)
-            ->whereBetween('date', [$request->from, $request->to])
-            ->where('class_held', false)
-            ->count();
+        $classesMissed = $classIds->isEmpty()
+            ? 0
+            : TeacherAttendance::whereIn('class_id', $classIds)
+                ->whereBetween('date', [$request->from, $request->to])
+                ->where('class_held', false)
+                ->count();
 
         return response()->json([
-            'class' => [
-                'id'         => $class->id,
-                'name'       => $class->name,
-                'grade_name' => $class->grade?->name,
-            ],
-            'from' => $request->from,
-            'to'   => $request->to,
+            'class' => $classMeta,
+            'scope' => $allClasses ? 'all' : 'class',
+            'from'  => $request->from,
+            'to'    => $request->to,
             'summary' => [
                 'present'        => $presentCount,
                 'absent'         => $absentCount,

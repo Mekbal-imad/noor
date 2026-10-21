@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use App\Models\Teacher;
 use App\Models\ParentModel;
+use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -67,6 +68,24 @@ class AuthController extends Controller
 
     return response()->json($classes);
 }
+
+    public function myStudents(Request $request)
+    {
+        $classIds = $request->user()->classes()->pluck('classes.id');
+
+        if ($classIds->isEmpty()) {
+            return response()->json([]);
+        }
+
+        $students = Student::whereHas(
+            'classes',
+            fn ($q) => $q->whereIn('classes.id', $classIds)
+        )
+            ->orderBy('name')
+            ->get();
+
+        return response()->json($students);
+    }
     public function changePassword(Request $request)
 {
     $request->validate([

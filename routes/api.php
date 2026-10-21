@@ -72,6 +72,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ── Teacher Routes ────────────────────────────────────
     Route::prefix('teacher')->group(function () {
         Route::get('my-classes', [AuthController::class, 'myClasses']);
+        Route::get('my-students', [AuthController::class, 'myStudents']);
         Route::get('classes/{id}/students', [AttendanceController::class, 'classStudents']);
         Route::post('teacher-attendance', [AttendanceController::class, 'markTeacherAttendance']);
         Route::get('teacher-attendance',  [AttendanceController::class, 'getTeacherAttendance']);
