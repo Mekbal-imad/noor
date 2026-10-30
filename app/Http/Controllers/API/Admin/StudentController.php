@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\ParentModel;
 use App\Models\Grade;
+use App\Models\ClassRoom;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class StudentController extends Controller
 {
@@ -59,22 +61,26 @@ class StudentController extends Controller
             'name'              => 'required|string',
             'grade_id'          => 'required|exists:grades,id',
             'health_condition'  => 'nullable|string',
-            'parent_name'       => 'required|string',
-            'parent_email'      => 'required|email',
+            'parent_name'       => 'nullable|string',
+            'parent_email'      => 'nullable|email',
             'parent_phone'      => 'nullable|string',
         ]);
 
-        $parent = ParentModel::firstOrCreate(
-            ['email' => $request->parent_email],
-            [
-                'name'     => $request->parent_name,
-                'password' => Hash::make('noor1234'),
-                'phone'    => $request->parent_phone,
-            ]
-        );
+        $parentId = null;
+        if ($request->filled('parent_email')) {
+            $parent = ParentModel::firstOrCreate(
+                ['email' => $request->parent_email],
+                [
+                    'name'     => $request->parent_name ?: 'ولي أمر',
+                    'password' => Hash::make('noor1234'),
+                    'phone'    => $request->parent_phone,
+                ]
+            );
+            $parentId = $parent->id;
+        }
 
         $student = Student::create([
-            'parent_id'        => $parent->id,
+            'parent_id'        => $parentId,
             'grade_id'         => $request->grade_id,
             'name'             => $request->name,
             'gender'           => 'male',
@@ -83,13 +89,81 @@ class StudentController extends Controller
         ]);
 
         // Auto-enroll in all classes of the grade
-        $classIds = \App\Models\ClassRoom::where('grade_id', $request->grade_id)->pluck('id');
+        $classIds = ClassRoom::where('grade_id', $request->grade_id)->pluck('id');
         $student->classes()->syncWithoutDetaching($classIds);
 
         return response()->json([
             'message' => 'تم إضافة الطالب بنجاح',
             'student' => $student->load('parent', 'grade')
         ], 201);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $student = Student::with('parent')->findOrFail($id);
+
+        $request->validate([
+            'name'              => 'required|string',
+            'grade_id'          => 'required|exists:grades,id',
+            'health_condition'  => 'nullable|string',
+            'parent_name'       => 'nullable|string',
+            'parent_email'      => [
+                'nullable',
+                'email',
+                Rule::unique('parents', 'email')->ignore($student->parent_id),
+            ],
+            'parent_phone'      => 'nullable|string',
+        ]);
+
+        $oldGradeId = $student->grade_id;
+
+        if ($student->parent_id && $student->parent) {
+            $parent = $student->parent;
+            if ($request->filled('parent_name')) {
+                $parent->name = $request->parent_name;
+            }
+            if ($request->filled('parent_email')) {
+                $parent->email = $request->parent_email;
+            }
+            if ($request->has('parent_phone')) {
+                $parent->phone = $request->parent_phone ?: null;
+            }
+            $parent->save();
+        } elseif ($request->filled('parent_email')) {
+            $parent = ParentModel::firstOrCreate(
+                ['email' => $request->parent_email],
+                [
+                    'name'     => $request->parent_name ?: 'ولي أمر',
+                    'password' => Hash::make('noor1234'),
+                    'phone'    => $request->parent_phone,
+                ]
+            );
+
+            if ($request->filled('parent_name')) {
+                $parent->name = $request->parent_name;
+            }
+            if ($request->has('parent_phone')) {
+                $parent->phone = $request->parent_phone ?: null;
+            }
+            $parent->save();
+
+            $student->parent_id = $parent->id;
+        }
+
+        $student->name = $request->name;
+        $student->grade_id = $request->grade_id;
+        $student->health_condition = $request->health_condition;
+        $student->save();
+
+        if ((int) $oldGradeId !== (int) $request->grade_id) {
+            $classIds = ClassRoom::where('grade_id', $request->grade_id)->pluck('id');
+            $student->classes()->syncWithoutDetaching($classIds);
+        }
+
+        return response()->json([
+            'message' => 'تم تحديث بيانات الطالب بنجاح',
+            'student' => $student->fresh()->load('parent', 'grade'),
+        ]);
     }
 
     // Bulk import from spreadsheet
@@ -99,8 +173,8 @@ class StudentController extends Controller
             'students'                       => 'required|array|min:1',
             'students.*.name'                => 'required|string',
             'students.*.grade_name'          => 'required|string',
-            'students.*.parent_name'         => 'required|string',
-            'students.*.parent_email'        => 'required|email',
+            'students.*.parent_name'         => 'nullable|string',
+            'students.*.parent_email'        => 'nullable|email',
             'students.*.parent_phone'        => 'nullable|string',
             'students.*.health_condition'    => 'nullable|string',
         ]);
@@ -118,17 +192,21 @@ class StudentController extends Controller
                 continue;
             }
 
-            $parent = ParentModel::firstOrCreate(
-                ['email' => $row['parent_email']],
-                [
-                    'name'     => $row['parent_name'],
-                    'password' => Hash::make('noor1234'),
-                    'phone'    => $row['parent_phone'] ?? null,
-                ]
-            );
+            $parentId = null;
+            if (!empty($row['parent_email'])) {
+                $parent = ParentModel::firstOrCreate(
+                    ['email' => $row['parent_email']],
+                    [
+                        'name'     => $row['parent_name'] ?: 'ولي أمر',
+                        'password' => Hash::make('noor1234'),
+                        'phone'    => $row['parent_phone'] ?? null,
+                    ]
+                );
+                $parentId = $parent->id;
+            }
 
             $student = Student::create([
-                'parent_id'        => $parent->id,
+                'parent_id'        => $parentId,
                 'grade_id'         => $grade->id,
                 'name'             => $row['name'],
                 'gender'           => 'male',
@@ -136,7 +214,7 @@ class StudentController extends Controller
                 'status'           => 'approved',
             ]);
 
-            $classIds = \App\Models\ClassRoom::where('grade_id', $grade->id)->pluck('id');
+            $classIds = ClassRoom::where('grade_id', $grade->id)->pluck('id');
             $student->classes()->syncWithoutDetaching($classIds);
 
             $results['success']++;
