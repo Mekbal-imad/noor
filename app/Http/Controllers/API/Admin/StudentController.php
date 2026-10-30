@@ -57,27 +57,19 @@ class StudentController extends Controller
     // Manual add by admin
     public function store(Request $request)
     {
+        $this->normalizeParentFields($request);
+
         $request->validate([
             'name'              => 'required|string',
             'grade_id'          => 'required|exists:grades,id',
             'health_condition'  => 'nullable|string',
             'parent_name'       => 'nullable|string',
-            'parent_email'      => 'nullable|email',
+            'parent_email'      => 'nullable|email|unique:parents,email',
             'parent_phone'      => 'nullable|string',
         ]);
 
-        $parentId = null;
-        if ($request->filled('parent_email')) {
-            $parent = ParentModel::firstOrCreate(
-                ['email' => $request->parent_email],
-                [
-                    'name'     => $request->parent_name ?: 'ولي أمر',
-                    'password' => Hash::make('noor1234'),
-                    'phone'    => $request->parent_phone,
-                ]
-            );
-            $parentId = $parent->id;
-        }
+        $parent = $this->syncParent($request);
+        $parentId = $parent?->id;
 
         $student = Student::create([
             'parent_id'        => $parentId,
@@ -101,6 +93,7 @@ class StudentController extends Controller
     public function update(Request $request, $id)
     {
         $student = Student::with('parent')->findOrFail($id);
+        $this->normalizeParentFields($request);
 
         $request->validate([
             'name'              => 'required|string',
@@ -117,36 +110,8 @@ class StudentController extends Controller
 
         $oldGradeId = $student->grade_id;
 
-        if ($student->parent_id && $student->parent) {
-            $parent = $student->parent;
-            if ($request->filled('parent_name')) {
-                $parent->name = $request->parent_name;
-            }
-            if ($request->filled('parent_email')) {
-                $parent->email = $request->parent_email;
-            }
-            if ($request->has('parent_phone')) {
-                $parent->phone = $request->parent_phone ?: null;
-            }
-            $parent->save();
-        } elseif ($request->filled('parent_email')) {
-            $parent = ParentModel::firstOrCreate(
-                ['email' => $request->parent_email],
-                [
-                    'name'     => $request->parent_name ?: 'ولي أمر',
-                    'password' => Hash::make('noor1234'),
-                    'phone'    => $request->parent_phone,
-                ]
-            );
-
-            if ($request->filled('parent_name')) {
-                $parent->name = $request->parent_name;
-            }
-            if ($request->has('parent_phone')) {
-                $parent->phone = $request->parent_phone ?: null;
-            }
-            $parent->save();
-
+        $parent = $this->syncParent($request, $student->parent);
+        if ($parent && !$student->parent_id) {
             $student->parent_id = $parent->id;
         }
 
@@ -192,21 +157,14 @@ class StudentController extends Controller
                 continue;
             }
 
-            $parentId = null;
-            if (!empty($row['parent_email'])) {
-                $parent = ParentModel::firstOrCreate(
-                    ['email' => $row['parent_email']],
-                    [
-                        'name'     => $row['parent_name'] ?: 'ولي أمر',
-                        'password' => Hash::make('noor1234'),
-                        'phone'    => $row['parent_phone'] ?? null,
-                    ]
-                );
-                $parentId = $parent->id;
-            }
+            $parent = $this->resolveParentFromValues(
+                $row['parent_name'] ?? null,
+                $row['parent_email'] ?? null,
+                $row['parent_phone'] ?? null,
+            );
 
             $student = Student::create([
-                'parent_id'        => $parentId,
+                'parent_id'        => $parent?->id,
                 'grade_id'         => $grade->id,
                 'name'             => $row['name'],
                 'gender'           => 'male',
@@ -223,6 +181,96 @@ class StudentController extends Controller
         return response()->json([
             'message' => "تم استيراد {$results['success']} طالب بنجاح",
             'results' => $results
+        ]);
+    }
+
+    private function normalizeParentFields(Request $request): void
+    {
+        $merge = [];
+        foreach (['parent_name', 'parent_email', 'parent_phone'] as $field) {
+            if ($request->has($field) && is_string($request->input($field)) && trim($request->input($field)) === '') {
+                $merge[$field] = null;
+            }
+        }
+        if ($merge) {
+            $request->merge($merge);
+        }
+    }
+
+    private function syncParent(Request $request, ?ParentModel $existing = null): ?ParentModel
+    {
+        return $this->resolveParentFromValues(
+            $request->input('parent_name'),
+            $request->input('parent_email'),
+            $request->input('parent_phone'),
+            $existing,
+            $request->has('parent_name'),
+            $request->has('parent_email'),
+            $request->has('parent_phone'),
+        );
+    }
+
+    private function resolveParentFromValues(
+        ?string $name,
+        ?string $email,
+        ?string $phone,
+        ?ParentModel $existing = null,
+        bool $nameProvided = true,
+        bool $emailProvided = true,
+        bool $phoneProvided = true,
+    ): ?ParentModel {
+        $name = is_string($name) ? trim($name) : null;
+        $email = is_string($email) ? trim($email) : null;
+        $phone = is_string($phone) ? trim($phone) : null;
+        if ($name === '') $name = null;
+        if ($email === '') $email = null;
+        if ($phone === '') $phone = null;
+
+        if ($existing) {
+            if ($nameProvided && $name !== null) {
+                $existing->name = $name;
+            }
+            if ($emailProvided) {
+                $existing->email = $email;
+            }
+            if ($phoneProvided) {
+                $existing->phone = $phone;
+            }
+            $existing->save();
+            return $existing;
+        }
+
+        if ($name === null && $email === null && $phone === null) {
+            return null;
+        }
+
+        if ($email !== null) {
+            $parent = ParentModel::firstOrCreate(
+                ['email' => $email],
+                [
+                    'name'     => $name ?: 'ولي أمر',
+                    'password' => Hash::make('noor1234'),
+                    'phone'    => $phone,
+                ]
+            );
+
+            if ($name !== null) {
+                $parent->name = $name;
+            }
+            if ($phoneProvided) {
+                $parent->phone = $phone;
+            }
+            $parent->save();
+
+            return $parent;
+        }
+
+        // Name and/or phone only — create a dedicated parent (not shared)
+        return ParentModel::create([
+            'name'     => $name ?: 'ولي أمر',
+            'email'    => null,
+            'password' => Hash::make('noor1234'),
+            'phone'    => $phone,
         ]);
     }
 }
