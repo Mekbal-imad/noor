@@ -128,7 +128,7 @@ public function gradeStats(Request $request)
     $period  = $request->period ?? 'week';
 
     $startDate = $period === 'week'
-        ? \Carbon\Carbon::now()->startOfWeek()
+        ? \Carbon\Carbon::now()->startOfWeek(\Carbon\Carbon::SUNDAY)
         : \Carbon\Carbon::now()->startOfMonth();
 
     // Get grades this teacher teaches
@@ -229,7 +229,7 @@ public function studentStats(Request $request, $studentId)
     $period    = $request->period ?? 'week';
 
     $startDate = $period === 'week'
-        ? \Carbon\Carbon::now()->startOfWeek()
+        ? \Carbon\Carbon::now()->startOfWeek(\Carbon\Carbon::SUNDAY)
         : \Carbon\Carbon::now()->startOfMonth();
 
     $student = \App\Models\Student::with('parent')->findOrFail($studentId);

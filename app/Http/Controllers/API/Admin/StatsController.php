@@ -51,7 +51,7 @@ class StatsController extends Controller
         $grade  = Grade::with(['classes', 'students'])->findOrFail($gradeId);
 
         $startDate = match($period) {
-            'week'  => Carbon::now()->startOfWeek(),
+            'week'  => Carbon::now()->startOfWeek(Carbon::SUNDAY),
             'month' => Carbon::now()->startOfMonth(),
             'year'  => Carbon::now()->startOfYear(),
         };
