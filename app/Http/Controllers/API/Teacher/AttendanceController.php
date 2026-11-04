@@ -86,13 +86,14 @@ class AttendanceController extends Controller
         'justification' => 'required_if:status,absent|nullable|string',
     ]);
 
+    // One session row per class+date; teacher_id = who last saved
     $record = \App\Models\TeacherAttendance::updateOrCreate(
         [
-            'class_id'   => $request->class_id,
-            'teacher_id' => $request->user()->id,
-            'date'       => $request->date,
+            'class_id' => $request->class_id,
+            'date'     => $request->date,
         ],
         [
+            'teacher_id'    => $request->user()->id,
             'status'        => $request->status,
             'justification' => $request->justification,
             'class_held'    => $request->status === 'present',
@@ -115,7 +116,6 @@ public function getTeacherAttendance(Request $request)
     ]);
 
     $record = \App\Models\TeacherAttendance::where('class_id', $request->class_id)
-        ->where('teacher_id', $request->user()->id)
         ->where('date', $request->date)
         ->first();
 
@@ -191,11 +191,17 @@ public function gradeStats(Request $request)
         $classesHeld = \App\Models\TeacherAttendance::whereIn('class_id', $classIds)
             ->where('date', '>=', $startDate)
             ->where('class_held', true)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
             ->count();
 
         $classesMissed = \App\Models\TeacherAttendance::whereIn('class_id', $classIds)
             ->where('date', '>=', $startDate)
             ->where('class_held', false)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
             ->count();
 
         $result[] = [
@@ -324,7 +330,9 @@ public function teacherAttendanceRange(Request $request)
         'to'   => 'required|date',
     ]);
 
-    $records = \App\Models\TeacherAttendance::where('teacher_id', $request->user()->id)
+    $classIds = $request->user()->classes()->pluck('classes.id');
+
+    $records = \App\Models\TeacherAttendance::whereIn('class_id', $classIds)
         ->whereBetween('date', [$request->from, $request->to])
         ->get(['class_id', 'date', 'status']);
 

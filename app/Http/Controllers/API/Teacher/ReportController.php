@@ -195,6 +195,9 @@ class ReportController extends Controller
             : TeacherAttendance::whereIn('class_id', $classIds)
                 ->whereBetween('date', [$request->from, $request->to])
                 ->where('class_held', true)
+                ->select('class_id', 'date')
+                ->groupBy('class_id', 'date')
+                ->get()
                 ->count();
 
         $classesMissed = $classIds->isEmpty()
@@ -202,6 +205,9 @@ class ReportController extends Controller
             : TeacherAttendance::whereIn('class_id', $classIds)
                 ->whereBetween('date', [$request->from, $request->to])
                 ->where('class_held', false)
+                ->select('class_id', 'date')
+                ->groupBy('class_id', 'date')
+                ->get()
                 ->count();
 
         return response()->json([

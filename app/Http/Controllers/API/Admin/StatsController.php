@@ -25,8 +25,18 @@ class StatsController extends Controller
         $today           = Carbon::today();
         $attendanceToday = Attendance::whereDate('date', $today)->count();
         $absentToday     = Attendance::whereDate('date', $today)->where('status', 'absent')->count();
-        $classesHeldToday = TeacherAttendance::whereDate('date', $today)->where('class_held', true)->count();
-        $classesMissedToday = TeacherAttendance::whereDate('date', $today)->where('class_held', false)->count();
+        $classesHeldToday = TeacherAttendance::whereDate('date', $today)
+            ->where('class_held', true)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
+            ->count();
+        $classesMissedToday = TeacherAttendance::whereDate('date', $today)
+            ->where('class_held', false)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
+            ->count();
 
         return response()->json([
             'total_grades'          => $totalGrades,
@@ -127,11 +137,17 @@ class StatsController extends Controller
         $classesHeld = TeacherAttendance::whereIn('class_id', $classIds)
             ->where('date', '>=', $startDate)
             ->where('class_held', true)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
             ->count();
 
         $classesMissed = TeacherAttendance::whereIn('class_id', $classIds)
             ->where('date', '>=', $startDate)
             ->where('class_held', false)
+            ->select('class_id', 'date')
+            ->groupBy('class_id', 'date')
+            ->get()
             ->count();
 
         // ── Memorization Stats ──
